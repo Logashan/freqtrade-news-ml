@@ -1,0 +1,186 @@
+{
+    "max_open_trades": 5,
+    "stake_currency": "USDT",
+    "stake_amount": {
+        "value": "unlimited",
+        "type": "fixed"
+    },
+    "tradable_balance_ratio": 0.99,
+    "fiat_display_currency": "USD",
+    "dry_run": true,
+    "dry_run_wallet": 1000,
+    "cancel_open_orders_on_exit": true,
+    
+    "trading_mode": "futures",
+    "margin_mode": "isolated",
+    "leverage": 3,
+    
+    "timeframe": "5m",
+    "timeframe_detail": "1m",
+    
+    "pair_whitelist": [
+        "BTC/USDT:USDT",
+        "ETH/USDT:USDT", 
+        "SOL/USDT:USDT",
+        "ADA/USDT:USDT",
+        "APT/USDT:USDT",
+        "RNDR/USDT:USDT",
+        "DOGE/USDT:USDT",
+        "SHIB/USDT:USDT", 
+        "PEPE/USDT:USDT",
+        "XRP/USDT:USDT",
+        "XLM/USDT:USDT",
+        "HBAR/USDT:USDT",
+        "LINK/USDT:USDT",
+        "ONDO/USDT:USDT"
+    ],
+    
+    "pair_blacklist": [
+        ".*_USDT",
+        ".*BEAR.*",
+        ".*BULL.*"
+    ],
+    
+    "exchange": {
+        "name": "bybit",
+        "key": "WY9PPzJPj2UefITyX4",
+        "secret": "HM4ofWqPH1YcOLDm6XuXoPpRtkxUAm6sWsmO",
+        "ccxt_config": {
+            "enableRateLimit": true,
+            "sandbox": false,
+            "timeout": 30000,
+            "options": {
+                "defaultType": "linear"
+            }
+        },
+        "ccxt_async_config": {
+            "enableRateLimit": true,
+            "timeout": 30000,
+            "rateLimit": 500,
+            "options": {
+                "defaultType": "linear"
+            }
+        }
+    },
+    
+    "ask_strategy": {
+        "price_side": "ask",
+        "use_order_book": true,
+        "order_book_top": 1,
+        "check_depth_of_market": {
+            "enabled": false,
+            "bids_to_ask_delta": 1
+        }
+    },
+    
+    "bid_strategy": {
+        "price_side": "bid", 
+        "use_order_book": true,
+        "order_book_top": 1
+    },
+    
+    "order_types": {
+        "entry": "limit",
+        "exit": "limit",
+        "emergency_exit": "market",
+        "force_entry": "market",
+        "force_exit": "market",
+        "stoploss": "limit",
+        "stoploss_on_exchange": true,
+        "stoploss_on_exchange_interval": 60,
+        "stoploss_on_exchange_limit_ratio": 0.99
+    },
+    
+    "order_time_in_force": {
+        "entry": "gtc",
+        "exit": "gtc"
+    },
+    
+    "stoploss": -0.05,
+    "trailing_stop": false,
+    "trailing_stop_positive": 0.02,
+    "trailing_stop_positive_offset": 0.03,
+    "trailing_only_offset_is_reached": false,
+    
+    "minimal_roi": {
+        "0": 0.02,
+        "40": 0.01,
+        "60": 0.005,
+        "120": 0
+    },
+    
+    "ask_strategy": {
+        "price_side": "ask",
+        "use_order_book": true,
+        "order_book_top": 1,
+        "check_depth_of_market": {
+            "enabled": false,
+            "bids_to_ask_delta": 1
+        }
+    },
+    
+    "bid_strategy": {
+        "price_side": "bid", 
+        "use_order_book": true,
+        "order_book_top": 1
+    },
+    
+    "unfilledtimeout": {
+        "entry": 10,
+        "exit": 10,
+        "exit_timeout_count": 0,
+        "unit": "minutes"
+    },
+    
+    "internals": {
+        "process_throttle_secs": 5
+    },
+    
+    "strategy": "NewsHeliusBitqueryML",
+    "strategy_path": "strategies/",
+    
+    "db_url": "sqlite:///tradesv3.sqlite",
+    "initial_state": "running",
+    "force_entry_enable": false,
+    "disable_dataframe_checks": false,
+    
+    "telegram": {
+        "enabled": false,
+        "token": "",
+        "chat_id": "",
+        "notification_settings": {
+            "status": "silent",
+            "warning": "on",
+            "startup": "on",
+            "entry": "on",
+            "entry_fill": "on", 
+            "exit": "on",
+            "exit_fill": "on",
+            "protection_trigger": "on",
+            "protection_trigger_global": "on"
+        }
+    },
+    
+    "api_server": {
+        "enabled": false,
+        "listen_ip_address": "127.0.0.1",
+        "listen_port": 8080,
+        "verbosity": "error",
+        "enable_openapi": false,
+        "jwt_secret_key": "somethingrandom",
+        "CORS_origins": [],
+        "username": "freqtrader",
+        "password": "SuperSecurePassword"
+    },
+    
+    "bot_name": "BybitFuturesBot",
+    "logfile": "logs/freqtrade.log",
+    "user_data_dir": "user_data",
+    
+    "external_apis": {
+        "fred_api_key": "952e4cbdb18e6c92efc97b5cb20ed083",
+        "news_api_key": "af2b82a2bb0d4d4fa8d71bfe446ca7de", 
+        "helius_api_key": "70e1e7c8-b159-4aa0-a30f-4203fdbd9f56",
+        "bitquery_api_key": "2a53bafe-c565-4b6a-bbcc-717000e2aee2"
+    }
+}

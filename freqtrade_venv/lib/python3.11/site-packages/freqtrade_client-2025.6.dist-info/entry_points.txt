@@ -1,0 +1,2 @@
+[console_scripts]
+freqtrade-client = freqtrade_client.ft_client:main
