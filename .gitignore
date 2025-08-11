@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+freqtrade_venv/
+user_data/data/
+user_data/*.log
+user_data/*.zip
+user_data/*.meta.json
+user_data/*.json
+!user_data/planCplus_C1g_summary.json
+user_data/run_*.json
+user_data/*_OOS.json
+user_data/*_IS.json
+user_data/strategies/backups/
