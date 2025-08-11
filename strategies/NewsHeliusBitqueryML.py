@@ -1,100 +1,158 @@
-from freqtrade.strategy.interface import IStrategy
-from pandas import DataFrame
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 import pandas as pd
+from pandas import DataFrame
+from datetime import datetime, timedelta
+from freqtrade.strategy import IStrategy, IntParameter, DecimalParameter
+from freqtrade.strategy.parameters import CategoricalParameter
+from freqtrade.persistence import Trade
+from freqtrade.exchange import timeframe_to_minutes
+from .indicators import calculate_all_indicators
+import warnings
+warnings.filterwarnings("ignore")
+
+logger = logging.getLogger(__name__)
 
 class NewsHeliusBitqueryML(IStrategy):
-    """
-    Базовая рабочая версия:
-    - Фильтр тренда: EMA50 > EMA200 (лонг), EMA50 < EMA200 (шорт)
-    - Волатильность: ATR/close > порога
-    - Временной фильтр: торги по UTC 7..20
-    - Входы: пересечения RSI порогов
-    - Выходы: RSI/EMA + ROI/SL из конфига
-    """
     timeframe = "5m"
-    process_only_new_candles = True
     can_short = True
+    process_only_new_candles = True
+    startup_candle_count = 240
     use_exit_signal = True
-    startup_candle_count = 240  # для EMA200/ATR стабилизации
+    exit_profit_only = False
+    ignore_roi_if_entry_signal = False
+    position_adjustment_enable = False
+    order_time_in_force = {
+        "entry": "GTC",
+        "exit": "GTC"
+    }
+    order_types = {
+        "entry": "limit",
+        "exit": "limit",
+        "stoploss": "limit",
+        "stoploss_on_exchange": False,
+        "stoploss_on_exchange_interval": 60,
+    }
+    
+    # Параметры для гипероптимизации ROI
+    minimal_roi = {
+        "0": 0.01,
+        "30": 0.005,
+        "90": 0.0
+    }
+    
+    stoploss = -0.02
+    
+    trailing_stop = True
+    trailing_stop_positive = 0.004
+    trailing_stop_positive_offset = 0.009
+    trailing_only_offset_is_reached = True
+    
+    ignore_buying_expired_candle_after = 1
+    
+    # Параметры для гипероптимизации
+    buy_params = {
+        "vol_min": 0.002,
+        "rsi_long_th": 45,
+        "adx_min": 14,
+        "ema_fast": 12,
+        "ema_slow": 26,
+        "rsi_period": 14,
+        "macd_fast": 12,
+        "macd_slow": 26,
+        "macd_signal": 9,
+        "atr_period": 14
+    }
+    
+    sell_params = {
+        "rsi_exit_long": 70,
+        "ema_exit_long": True
+    }
+    
+    # Параметры для гипероптимизации ROI
+    roi_params = {
+        "roi_0": 0.01,
+        "roi_30": 0.005,
+        "roi_90": 0.0
+    }
+    
+    # Параметры для гипероптимизации Stoploss
+    stoploss_params = {
+        "stoploss": -0.02
+    }
+    
+    # Параметры для гипероптимизации Trailing Stop
+    trailing_params = {
+        "trailing_stop": True,
+        "trailing_stop_positive": 0.004,
+        "trailing_stop_positive_offset": 0.009,
+        "trailing_only_offset_is_reached": True
+    }
 
-    # --- простые индикаторы на pandas ---
-    @staticmethod
-    def _ema(series: pd.Series, length: int) -> pd.Series:
-        return series.ewm(span=length, adjust=False).mean()
-
-    @staticmethod
-    def _rsi(series: pd.Series, length: int = 14) -> pd.Series:
-        delta = series.diff()
-        up = delta.clip(lower=0)
-        down = (-delta.clip(upper=0))
-        ma_up = up.ewm(alpha=1/length, adjust=False, min_periods=length).mean()
-        ma_down = down.ewm(alpha=1/length, adjust=False, min_periods=length).mean()
-        rs = ma_up / (ma_down.replace(0, 1e-9))
-        return 100 - (100 / (1 + rs))
-
-    @staticmethod
-    def _atr(df: DataFrame, length: int = 14) -> pd.Series:
-        high, low, close = df['high'], df['low'], df['close']
-        tr = pd.concat([
-            (high - low),
-            (high - close.shift()).abs(),
-            (low - close.shift()).abs()
-        ], axis=1).max(axis=1)
-        return tr.ewm(alpha=1/length, adjust=False, min_periods=length).mean()
-
-    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        df = dataframe.copy()
-        df['ema_fast'] = self._ema(df['close'], 50)
-        df['ema_slow'] = self._ema(df['close'], 200)
-        df['rsi'] = self._rsi(df['close'], 14)
-        df['atr'] = self._atr(df, 14)
-        df['vol_frac'] = (df['atr'] / df['close']).fillna(0)
-
-        hours = df['date'].dt.hour if 'date' in df.columns else df.index.tz_convert('UTC').hour
-        df['tradable_hour'] = ((hours >= 7) & (hours <= 20)).astype(int)
-
-        df.fillna(method="ffill", inplace=True)
-        df.dropna(inplace=True)
+    def populate_indicators(self, df: DataFrame, metadata: dict) -> DataFrame:
+        df = calculate_all_indicators(df)
+        for c in ["macd", "macd_sig", "rsi", "atr", "ema50", "ema200"]:
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+        df["vol_ok"] = (df["atr"] / df["close"] > 0.0015)
+        df.ffill(inplace=True)
+        df.bfill(inplace=True)
         return df
 
-    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        df = dataframe.copy()
+    def populate_entry_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
+        trend_long  = df["ema50"] > df["ema200"]
+        trend_short = df["ema50"] < df["ema200"]
 
-        vol_min = 0.004     # ~0.4% средней 5m-волы
-        rsi_long_th = 35
-        rsi_short_th = 65
+        macd_cross_up   = (df["macd"] > df["macd_sig"]) & (df["macd"].shift(1) <= df["macd_sig"].shift(1))
+        macd_cross_down = (df["macd"] < df["macd_sig"]) & (df["macd"].shift(1) >= df["macd_sig"].shift(1))
 
-        long_cond = (
-            (df['ema_fast'] > df['ema_slow']) &
-            (df['vol_frac'] > vol_min) &
-            (df['rsi'].shift(1) < rsi_long_th) & (df['rsi'] >= rsi_long_th) &
-            (df['tradable_hour'] == 1)
-        )
-        short_cond = (
-            (df['ema_fast'] < df['ema_slow']) &
-            (df['vol_frac'] > vol_min) &
-            (df['rsi'].shift(1) > rsi_short_th) & (df['rsi'] <= rsi_short_th) &
-            (df['tradable_hour'] == 1)
-        )
+        rsi_ok_long  = df["rsi"] > 45
+        rsi_ok_short = df["rsi"] < 55
 
-        df['enter_long'] = long_cond.astype(int)
-        df['enter_short'] = short_cond.astype(int)
+        df["enter_long"]  = (trend_long  & df["vol_ok"] & macd_cross_up   & rsi_ok_long).astype(int)
+        df["enter_short"] = (trend_short & df["vol_ok"] & macd_cross_down & rsi_ok_short).astype(int)
         return df
 
-    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        df = dataframe.copy()
-        exit_long = ( (df['rsi'] > 70) | (df['close'] < df['ema_fast']) )
-        exit_short = ( (df['rsi'] < 30) | (df['close'] > df['ema_fast']) )
-        df['exit_long'] = exit_long.astype(int)
-        df['exit_short'] = exit_short.astype(int)
+    def populate_exit_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
+        df["exit_long"]  = ((df["macd"] < df["macd_sig"]) | (df["rsi"] < 50)).astype(int)
+        df["exit_short"] = ((df["macd"] > df["macd_sig"]) | (df["rsi"] > 50)).astype(int)
         return df
+    
+    # Методы для гипероптимизации ROI
+    def custom_roi(self, dataframe: DataFrame, trade: Trade, current_time: datetime, **kwargs) -> float:
+        # Динамический ROI на основе времени удержания позиции
+        open_minutes = (current_time - trade.open_date_utc).total_seconds() / 60
+        
+        if open_minutes <= 30:
+            return self.roi_params['roi_0']
+        elif open_minutes <= 90:
+            return self.roi_params['roi_30']
+        else:
+            return self.roi_params['roi_90']
+    
+    # Методы для гипероптимизации Stoploss
+    def custom_stoploss(self, pair: str, trade: Trade, current_time: datetime, current_rate: float, current_profit: float, **kwargs) -> float:
+        return self.stoploss_params['stoploss']
+    
+    # Методы для гипероптимизации Trailing Stop
+    def custom_trailing_stop(self, pair: str, trade: Trade, current_time: datetime, current_rate: float, current_profit: float, **kwargs) -> float:
+        if not self.trailing_params['trailing_stop']:
+            return 0
+        
+        if current_profit > self.trailing_params['trailing_stop_positive_offset']:
+            return self.trailing_params['trailing_stop_positive']
+        
+        return 0
 
     @property
     def protections(self):
         return [
             {"method": "CooldownPeriod", "stop_duration_candles": 5},
-            {"method": "StoplossGuard", "lookback_period_candles": 288, "trade_limit": 2,
-             "stop_duration_candles": 30, "only_per_pair": False},
-            {"method": "MaxDrawdown", "lookback_period_candles": 288, "trade_limit": 10,
-             "stop_duration_candles": 60, "max_allowed_drawdown": 0.08}
+            {"method": "StoplossGuard", "lookback_period_candles": 288,
+             "stop_duration_candles": 30, "only_per_pair": False, "trade_limit": 2},
+            {"method": "MaxDrawdown", "lookback_period_candles": 288,
+             "stop_duration_candles": 60, "max_allowed_drawdown": 8,
+             "only_per_pair": False}
         ]

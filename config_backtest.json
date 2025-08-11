@@ -23,12 +23,12 @@
   },
   "trading_mode": "futures",
   "margin_mode": "isolated",
-  "max_open_trades": 3,
+  "max_open_trades": 1,
   "dry_run_wallet": 1000,
-  "strategy_path": "strategies/",
-  "timeframe": "5m",
+  "strategy_path": "user_data/strategies/",
+  "timeframe": "15m",
   "stake_currency": "USDT",
-  "stake_amount": "unlimited",
+  "stake_amount": 100,
   "leverage": { "enabled": true, "max_leverage": 3, "leverage_type": "isolated" },
   "dry_run": true,
   "strategy": "NewsHeliusBitqueryML",
@@ -43,14 +43,10 @@
     "stoploss_on_exchange_interval": 60,"stoploss_on_exchange_limit_ratio": 0.99
   },
   "order_time_in_force": { "entry": "gtc", "exit": "gtc" },
-  "stoploss": -0.02,
+  // "stoploss": -0.02,
   "ignore_buying_expired_candle_after": 1,
-  "minimal_roi": { "0": 0.02, "40": 0.01, "60": 0.005, "120": 0 },
-  // "protections": [
-  //   { "method": "CooldownPeriod", "stop_duration_candles": 5 },
-  //   { "method": "StoplossGuard", "lookback_period_candles": 288, "trade_limit": 2, "stop_duration_candles": 30, "only_per_pair": false },
-  //   { "method": "MaxDrawdown", "lookback_period_candles": 288, "trade_limit": 10, "stop_duration_candles": 60, "max_allowed_drawdown": 0.08 }
-  // ],
+  // "minimal_roi": { "0": 0.02, "40": 0.01, "60": 0.005, "120": 0 },
+
   "unfilledtimeout": { "entry": 10, "exit": 10, "exit_timeout_count": 0, "unit": "minutes" },
   "entry_pricing": {
     "price_side": "same",

@@ -1,0 +1,25 @@
+{
+  "preset": "C1g",
+  "IS": {
+    "trades": 4,
+    "total_profit_pct": -0.06,
+    "profit_factor": 0.35,
+    "winrate_pct": 25.0,
+    "max_drawdown_pct": 0.09
+  },
+  "OOS": {
+    "trades": 16,
+    "total_profit_pct": 0.1,
+    "profit_factor": 1.4,
+    "winrate_pct": 56.2,
+    "max_drawdown_pct": 0.2
+  },
+  "criteria": {
+    "min_trades": 15,
+    "max_trades": 35,
+    "min_pf": 1.2,
+    "min_profit_pct": 0.0,
+    "max_dd_pct": 1.0
+  },
+  "OOS_passed": true
+}
