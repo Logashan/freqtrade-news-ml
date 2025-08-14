@@ -1,0 +1,27 @@
+{
+  "strategy_name": "NewsHeliusBitqueryML",
+  "params": {
+    "buy": {
+      "donch_window": 20,
+      "atr_min_pct": 0.0007,
+      "atr_max_pct": 0.0200,
+      "adx_min": 12,
+      "ema_kiss_pct": 0.0055,
+      "rsi_min_long": 46,
+      "entry_mode": "breakout",
+      "vol_spike_mult": 1.02
+    },
+    "sell": {
+      "rsi_exit_high": 60,
+      "ce_n": 22,
+      "ce_k": 2.5,
+      "time_stop_bars": 48
+    },
+    "trailing": {
+      "ts_enable": true,
+      "ts_positive": 0.004,
+      "ts_offset": 0.010
+    }
+  }
+}
+

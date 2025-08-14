@@ -18,3 +18,17 @@ user_data/pairs_tmp.txt
 freqtrade_venv/
 **/__pycache__/
 *.pyc
+
+# --- user_data: игнорим всё, кроме стратегий и коротких отчётов ---
+user_data/*
+# оставить короткие отчёты (например: ids5m_Q2_OOS_report.json)
+!user_data/*_report.json
+
+# оставить код и пресеты стратегий
+!user_data/strategies/
+user_data/strategies/*
+!user_data/strategies/*.py
+!user_data/strategies/*.json
+
+# не тащим бэкапы стратегий
+user_data/strategies/backups/
