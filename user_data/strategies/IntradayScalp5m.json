@@ -1,0 +1,40 @@
+{
+  "strategy_name": "IntradayScalp5m",
+  "params": {
+    "max_open_trades": {
+      "max_open_trades": 1
+    },
+    "buy": {
+      "atr_max_pct": 0.03,
+      "atr_min_pct": 0.004,
+      "atr_mult": 1.3,
+      "vol_q_thres": 0.9,
+      "vol_q_window": 120
+    },
+    "sell": {},
+    "protection": {
+      "lpp_lb_candles": 8,
+      "lpp_required_profit": 0.0,
+      "lpp_stop_candles": 12,
+      "mdd_max_dd": 0.02,
+      "mdd_stop_candles": 144
+    },
+    "roi": {
+      "0": 0.141,
+      "30": 0.05,
+      "41": 0.031,
+      "130": 0
+    },
+    "stoploss": {
+      "stoploss": -0.179
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.244,
+      "trailing_stop_positive_offset": 0.313,
+      "trailing_only_offset_is_reached": true
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2025-08-14 14:43:44.418506+00:00"
+}
