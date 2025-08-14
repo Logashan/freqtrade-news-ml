@@ -21,8 +21,8 @@ warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
 class NewsHeliusBitqueryML(IStrategy):
-    timeframe = "15m"
-    informative_timeframe = "1h"
+    timeframe = "1h"
+    informative_timeframe = "4h"
     can_short = False
     process_only_new_candles = True
     startup_candle_count = 50
@@ -60,15 +60,20 @@ class NewsHeliusBitqueryML(IStrategy):
     
     # --- ПАРАМЕТРЫ ВХОДА / ФИЛЬТРОВ ---
     donch_window = IntParameter(20, 60, default=35, space="buy", optimize=True)
-    atr_min_pct = DecimalParameter(0.0020, 0.0100, decimals=4, default=0.0020, space="buy", optimize=True)
+    atr_min_pct = DecimalParameter(0.0010, 0.0100, decimals=4, default=0.0020, space="buy", optimize=True)
+    atr_max_pct = DecimalParameter(0.0050, 0.0300, decimals=4, default=0.0150, space="buy", optimize=True)
     rsi_min_long = IntParameter(48, 58, default=52, space="buy", optimize=True)
     adx_min = IntParameter(14, 28, default=18, space="buy", optimize=True)
     ema_kiss_pct = DecimalParameter(0.0010, 0.0040, decimals=4, default=0.0035, space="buy", optimize=True)
+    vol_spike_mult = DecimalParameter(1.00, 2.00, decimals=2, default=1.20, space="buy", optimize=True)
 
     entry_mode = CategoricalParameter(["breakout", "pullback"], default="breakout", space="buy", optimize=True)
 
     # --- ПАРАМЕТРЫ ВЫХОДА / РИСК ---
     rsi_exit_high = IntParameter(62, 75, default=64, space="sell", optimize=True)
+    ce_n = IntParameter(10, 60, default=22, space="sell", optimize=True)
+    ce_k = DecimalParameter(1.0, 5.0, decimals=2, default=2.5, space="sell", optimize=True)
+    time_stop_bars = IntParameter(12, 96, default=48, space="sell", optimize=True)
     sl_static = DecimalParameter(-0.025, -0.008, decimals=3, default=-0.012, space="protection", optimize=True)
     ts_enable = CategoricalParameter([True, False], default=True, space="sell", optimize=True)
     ts_positive = DecimalParameter(0.0030, 0.0100, decimals=4, default=0.0060, space="sell", optimize=True)
@@ -88,11 +93,13 @@ class NewsHeliusBitqueryML(IStrategy):
             pass
 
     def populate_indicators(self, df: DataFrame, metadata: dict) -> DataFrame:
-        # --- EMA(50/200)
+        # --- EMA(50/200) и наклоны на базовом ТФ (1h)
         df["ema_fast"] = df["close"].ewm(span=50, adjust=False).mean()
         df["ema_slow"] = df["close"].ewm(span=200, adjust=False).mean()
-        # Слоупы ЕМА (направление тренда)
         df["ema_fast_slope"] = df["ema_fast"] - df["ema_fast"].shift(1)
+        # Базовый режим по EMA200 1h
+        df["ema200_1h"] = df["close"].ewm(span=200, adjust=False).mean()
+        df["ema200_slope_1h"] = df["ema200_1h"].pct_change(3).fillna(0)
 
         # --- MACD (12,26,9)
         macd_fast = df["close"].ewm(span=12, adjust=False).mean()
@@ -122,8 +129,12 @@ class NewsHeliusBitqueryML(IStrategy):
         
         # 1) Расчёт ATR% (диапазон волатильности)
         df["atr_pct"] = (df["atr"] / df["close"]).clip(lower=0)
-        # Фильтр волатильности: ATR% > заданного минимума
-        df["vol_ok"] = df["atr_pct"] > float(self.atr_min_pct.value)
+        # Коридор волатильности: между atr_min_pct и atr_max_pct
+        df["vol_band"] = df["atr_pct"].between(float(self.atr_min_pct.value), float(self.atr_max_pct.value))
+        
+        # 1b) Объём: SMA20 и всплеск объёма
+        df["vol_sma20"] = df["volume"].rolling(20, min_periods=1).mean()
+        df["vol_ok"] = df["volume"] > (df["vol_sma20"] * float(self.vol_spike_mult.value))
         
         # --- Donchian Channels для breakout режима (по параметру окна)
         win = int(self.donch_window.value)
@@ -146,7 +157,7 @@ class NewsHeliusBitqueryML(IStrategy):
         dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).replace([np.inf, -np.inf], np.nan)
         df["adx"] = dx.ewm(alpha=1/14, adjust=False).mean().fillna(20)
 
-        # 2) Информативные данные 1h: EMA200_1h и её наклон
+        # 2) Информативные данные 4h: EMA200_4h и её наклон
         try:
             pair = metadata.get("pair") if isinstance(metadata, dict) else None
             if pair and hasattr(self, "dp") and self.dp:
@@ -162,25 +173,41 @@ class NewsHeliusBitqueryML(IStrategy):
                         timeframe_inf=self.informative_timeframe,
                         ffill=True,
                     )
-                    # Режимный фильтр по 1h EMA200
-                    df["regime_long"] = (df["close"] > df["ema200_1h"]) & (df["ema200_slope_1h"] > 0)
-                    df["regime_short"] = (df["close"] < df["ema200_1h"]) & (df["ema200_slope_1h"] < 0)
+                    # Режимные фильтры: 1h и 4h одновременно
+                    df["regime_1h"] = (df["close"] > df["ema200_1h"]) & (df["ema200_slope_1h"] > 0)
+                    df["regime_4h"] = (df["close"] > df.get("ema200_4h", df.get("ema200_4h", df["close"])) ) & (df.get("ema200_slope_4h", 0) > 0)
+                    # Совместный режим для совместимости со старой логикой
+                    df["regime_long"] = df["regime_1h"] & df["regime_4h"]
+                    df["regime_short"] = ~df["regime_long"]
         except Exception:
             # В случае отсутствия dp или на самых ранних свечах — безопасный дефолт
+            df["regime_1h"] = True
+            df["regime_4h"] = True
             df["regime_long"] = True
             df["regime_short"] = False
+
+        # Chandelier Exit (long)
+        ce_n_val = int(self.ce_n.value) if hasattr(self, "ce_n") else 22
+        ce_k_val = float(self.ce_k.value) if hasattr(self, "ce_k") else 2.5
+        df["ce_long"] = df["high"].rolling(ce_n_val, min_periods=1).max() - df["atr"] * ce_k_val
 
         # безопасность от NaN
         for c in [
             "ema200_1h",
             "ema200_slope_1h",
+            "ema200_4h",
+            "ema200_slope_4h",
+            "regime_1h",
+            "regime_4h",
             "regime_long",
             "regime_short",
             "atr_pct",
+            "vol_band",
             "vol_ok",
             "donch_hi",
             "donch_lo",
             "adx",
+            "ce_long",
         ]:
             if c in df:
                 df[c] = df[c].ffill().bfill()
@@ -196,24 +223,25 @@ class NewsHeliusBitqueryML(IStrategy):
         mode = self.entry_mode.value if isinstance(self.entry_mode, CategoricalParameter) else "breakout"
 
         vol_ok = df.get("vol_ok", pd.Series(True, index=df.index))
+        vol_band = df.get("vol_band", pd.Series(True, index=df.index))
         regime_long = df.get("regime_long", pd.Series(True, index=df.index))
+        combined_filter = vol_ok & vol_band & regime_long
 
         if mode == "breakout":
             # Пробой Donchian High (окно параметризовано) + RSI/ADX + режимный фильтр
             donch_hi_prev = df["donch_hi"].shift(1)
             long_cond = (
-                vol_ok
+                combined_filter
                 & (df["close"] > donch_hi_prev)
                 & (df["rsi"] > int(self.rsi_min_long.value))
                 & (df["adx"] > int(self.adx_min.value))
-                & regime_long
             )
             short_cond = pd.Series(False, index=df.index)
         else:
             # Откат: цена в пределах ± ema_kiss_pct от EMA_fast + подтверждение MACD-гистограммой + режимный фильтр
             near_ema = (df["close"] / df["ema_fast"] - 1.0).abs() <= float(self.ema_kiss_pct.value)
             macd_conf = (df["macd_hist"] > 0) & (df["macd_hist_slope"] > 0)
-            long_cond = vol_ok & near_ema & macd_conf & regime_long
+            long_cond = combined_filter & near_ema & macd_conf
             short_cond = pd.Series(False, index=df.index)
 
         # Итоговые сигналы
@@ -225,8 +253,16 @@ class NewsHeliusBitqueryML(IStrategy):
         return df
 
     def populate_exit_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
-        # Выход: RSI выше порога или пробой вниз EMA_fast
-        exit_l = (df["rsi"] > int(self.rsi_exit_high.value)) | (df["close"] < df["ema_fast"]) 
+        # Выход: Chandelier Exit (long) ИЛИ RSI выше порога ИЛИ лимит по времени в сделке
+        # bars_since_entry по последнему сигналу входа (апроксимация времени в сделке)
+        enter_flag = df.get("enter_long", pd.Series(0, index=df.index)).fillna(0).astype(int)
+        enter_cum = enter_flag.cumsum()
+        last_entry_cum = enter_cum.where(enter_flag == 1).ffill().fillna(0)
+        bars_since_entry = (enter_cum - last_entry_cum).astype(int)
+        df["bars_since_entry"] = bars_since_entry
+
+        time_stop = int(self.time_stop_bars.value) if hasattr(self, "time_stop_bars") else 48
+        exit_l = (df["close"] < df.get("ce_long", df["ema_fast"])) | (df["rsi"] > int(self.rsi_exit_high.value)) | (bars_since_entry > time_stop)
         exit_s = pd.Series(False, index=df.index)
 
         df["exit_long"] = 0

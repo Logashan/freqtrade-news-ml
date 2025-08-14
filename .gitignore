@@ -1,13 +1,20 @@
-__pycache__/
-*.pyc
-freqtrade_venv/
+# --- игнорим данные, бэктесты, артефакты ---
 user_data/data/
-user_data/*.log
-user_data/*.zip
-user_data/*.meta.json
-user_data/*.json
-!user_data/planCplus_C1g_summary.json
-user_data/run_*.json
-user_data/*_OOS.json
-user_data/*_IS.json
-user_data/strategies/backups/
+user_data/backtest_results/
+user_data/hyperopt_results/
+
+# крупные файлы/логи (глобально)
+*.feather
+*.zip
+*.meta.json
+*.log
+
+# временные файлы
+user_data/pairs_tmp.txt
+
+# оставим короткие отчёты, если будут
+!user_data/*_report.json
+# виртуалка и кэши
+freqtrade_venv/
+**/__pycache__/
+*.pyc

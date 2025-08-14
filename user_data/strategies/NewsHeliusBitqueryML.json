@@ -1,21 +1,38 @@
 {
   "strategy_name": "NewsHeliusBitqueryML",
   "params": {
+    "max_open_trades": {
+      "max_open_trades": 1
+    },
     "buy": {
-      "donch_window": 23,
-      "atr_min_pct": 0.0011,
-      "adx_min": 16,
-      "ema_kiss_pct": 0.0042,
-      "rsi_min_long": 48,
-      "entry_mode": "breakout"
+      "donch_window": 18,
+      "atr_min_pct": 0.0006,
+      "atr_max_pct": 0.0200,
+      "adx_min": 12,
+      "ema_kiss_pct": 0.0070,
+      "rsi_min_long": 46,
+      "entry_mode": "breakout",
+      "vol_spike_mult": 1.02
     },
     "sell": {
-      "rsi_exit_high": 62
+      "rsi_exit_high": 60,
+      "ce_n": 22,
+      "ce_k": 2.5,
+      "time_stop_bars": 48,
+      "ts_enable": true,
+      "ts_positive": 0.004,
+      "ts_offset": 0.010
+    },
+    "protection": {
+      "sl_static": -0.012
     },
     "trailing": {
-      "ts_enable": true,
-      "ts_positive": 0.005,
-      "ts_offset": 0.009
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.004,
+      "trailing_stop_positive_offset": 0.010,
+      "trailing_only_offset_is_reached": true
     }
-  }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2025-08-13 00:31:48.144912+00:00"
 }
